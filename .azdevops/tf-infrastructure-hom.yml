@@ -1,4 +1,4 @@
-# Definir variável: TF-PATH
+# Definir variáveis de acordo com o readme.md
 
 name: 1.0.$(Rev:r)
 
@@ -40,8 +40,8 @@ stages:
         
 - task: AzureKeyVault@2
   inputs:
-    azureSubscription: 'DEV_CORE_MODA_SHOPPING_SP_SAPI'
-    KeyVaultName: 'sapi-tf-keyvault'
+    azureSubscription: $(TF-Subscription-ID)
+    KeyVaultName: $(TF-KeyVault-Name)
     SecretsFilter: '*'
     RunAsPreJob: true
 
