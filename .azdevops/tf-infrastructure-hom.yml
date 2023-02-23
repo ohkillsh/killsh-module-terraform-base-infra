@@ -1,0 +1,168 @@
+# Definir variável: TF-PATH
+
+name: 1.0.$(Rev:r)
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - $(TF-PATH)
+
+parameters:
+  - name: runTFsec
+    displayName: Run Terrafom TFsec?
+    type: boolean
+    default: false
+
+  - name: runCheckChanges
+    displayName: Run Terrafom CheckChanges?
+    type: boolean
+    default: false
+
+variables:
+  - name: tf_in_automation
+    value: true
+  - name: tf_parallelism
+    value: 20
+
+stages:
+- stage: PlanStage
+  jobs:
+    - job: Plan
+      displayName: "Terraform - Plan"
+      pool: #default
+        vmImage: ubuntu-latest
+      steps:
+        - checkout: self
+          fetchDepth: 1
+        
+- task: AzureKeyVault@2
+  inputs:
+    azureSubscription: 'DEV_CORE_MODA_SHOPPING_SP_SAPI'
+    KeyVaultName: 'sapi-tf-keyvault'
+    SecretsFilter: '*'
+    RunAsPreJob: true
+
+- task: TerraformInstaller@0
+  displayName: "install"
+  inputs:
+    terraformVersion: "1.3.9"
+
+- bash: |
+    terraform fmt
+  workingDirectory: $(TF-Path)
+  displayName: "Terraform Format"
+
+- bash: |
+    terraform -v
+    terraform init --input=false \
+      -backend-config="resource_group_name=$(TF-BACKEND-RESOURCEGROUP)" \
+      -backend-config="storage_account_name=$(TF-BACKEND-STGNAME)" \
+      -backend-config="container_name=$(TF-BACKEND-STGCONTAINER)" \
+      -backend-config="key=$(TF-BACKEND-STGKEY)"
+  workingDirectory: $(TF-Path)
+  env:
+    TF_IN_AUTOMATION: true
+    ARM_ACCESS_KEY: $(stg-terraform-accesskey)
+    ARM_CLIENT_ID: $(tf-sp-clientId)
+    ARM_CLIENT_SECRET: $(tf-sp-clientSecret)
+    ARM_SUBSCRIPTION_ID: $(tf-sp-subscriptionId)
+    ARM_TENANT_ID: $(tf-sp-tenantId)
+  displayName: "Terraform Init"
+
+- bash: |
+    terraform plan --input=false --out=stage.tfplan
+  workingDirectory: $(TF-Path)
+  env:
+    ARM_ACCESS_KEY: $(stg-terraform-accesskey)
+    ARM_CLIENT_ID: $(tf-sp-clientId)
+    ARM_CLIENT_SECRET: $(tf-sp-clientSecret)
+    ARM_SUBSCRIPTION_ID: $(tf-sp-subscriptionId)
+    ARM_TENANT_ID: $(tf-sp-tenantId)
+  displayName: "Terraform Plan"
+
+- ${{ if eq(parameters.runCheckChanges, true) }}:
+- bash: |
+    docker run -v $PWD:/workspace -w /workspace ghcr.io/dineshba/tf-summarize stage.tfplan
+  workingDirectory: $(TF-Path)
+  continueOnError: true
+  displayName: "Terraform Check Changes"
+        
+- ${{ if eq(parameters.runTFsec, true) }}:
+- bash: |
+    docker run --rm -v $PWD:/app -w /app tfsec/tfsec .
+  workingDirectory: $(TF-Path)
+  continueOnError: true
+  displayName: "Validação TFsec"
+
+- task: ArchiveFiles@2
+  inputs:
+    rootFolderOrFile: $(TF-Path) #'$(Build.SourcesDirectory)'
+    includeRootFolder: false
+    archiveType: "tar"
+    tarCompression: "gz"
+    archiveFile: "$(BUILD_ARTIFACTSTAGINGDIRECTORY)/$(Build.BuildId).tgz"
+    replaceExistingArchive: true
+  displayName: "Create Plan Artifact"
+
+- task: PublishBuildArtifacts@1
+  inputs:
+    PathtoPublish: "$(BUILD_ARTIFACTSTAGINGDIRECTORY)"
+    ArtifactName: "drop"
+    publishLocation: "Container"
+  displayName: "Publish Plan Artifact"
+
+# 2 - Apply Stage
+- stage: ApplyStage
+  jobs:
+    - deployment: ApplyStage
+      displayName: "Terraform - Deploy"
+      pool: #default
+        vmImage: ubuntu-latest
+      environment: $(TF-Environment-Name)
+      workspace:
+        clean: all
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+              - checkout: none
+
+- task: AzureKeyVault@1
+  inputs:
+    azureSubscription: $(TF-Subscription-ID)
+    KeyVaultName: $(TF-KeyVault-Name)
+    SecretsFilter: "*"
+    RunAsPreJob: true
+  displayName: "Load Secrets from Azure KeyVault"
+
+                - task: DownloadBuildArtifacts@0
+                  inputs:
+                    artifactName: "drop"
+                  displayName: "Download Plan Artifact"
+
+                - task: ExtractFiles@1
+                  inputs:
+                    archiveFilePatterns: "$(System.ArtifactsDirectory)/drop/$(Build.BuildId).tgz"
+                    destinationFolder: "$(System.DefaultWorkingDirectory)/apply"
+                    cleanDestinationFolder: false
+                    overwriteExistingFiles: false
+                  displayName: "Extract Plan Artifact"
+
+                - task: TerraformInstaller@0
+                  displayName: "install"
+                  inputs:
+                    terraformVersion: "1.3.7"
+
+                - bash: |
+                    terraform apply --input=false stage.tfplan
+                  workingDirectory: "$(System.DefaultWorkingDirectory)/apply"
+                  env:
+                    ARM_ACCESS_KEY: $(stg-terraform-accesskey)
+                    ARM_CLIENT_ID: $(tf-sp-clientId)
+                    ARM_CLIENT_SECRET: $(tf-sp-clientSecret)
+                    ARM_SUBSCRIPTION_ID: $(tf-sp-subscriptionId)
+                    ARM_TENANT_ID: $(tf-sp-tenantId)
+                  displayName: "Terraform APPLY"
