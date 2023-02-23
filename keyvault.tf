@@ -43,7 +43,7 @@ resource "azurerm_key_vault_secret" "tf-stg-accesskey" {
   key_vault_id = azurerm_key_vault.base-tf-keyvault.id
 
   depends_on = [
-    azurerm_storage_account.stg-stg-base
+    azurerm_storage_account.stg-base
   ]
 }
 
