@@ -23,17 +23,13 @@ az ad sp create-for-rbac --name $spName --role contributor --scopes /subscriptio
 # Guarde em um lugar seguro as informações do output
 ```
 
-```bash
-# Bash/Shell
-export ARM_CLIENT_ID="00000000-0000-0000-0000-000000000000"
-export ARM_CLIENT_SECRET="12345678-0000-0000-0000-000000000000"
-export ARM_TENANT_ID="10000000-0000-0000-0000-000000000000"
-export ARM_SUBSCRIPTION_ID="20000000-0000-0000-0000-000000000000"
-```
-
 ## Criando a estrutura base
 
 ```bash
+# Login utilizando AZ CLI
+az login 
+az account set -s ""
+
 # Terraform Init
 terraform init -upgrade --input=false 
 
