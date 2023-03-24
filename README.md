@@ -1,4 +1,5 @@
 # Introduction
+
 Repositório base para utilização de terraform em uma estrutura DevOps.
 
 **Autenticação:**
@@ -19,6 +20,8 @@ export ARM_SUBSCRIPTION_ID="20000000-0000-0000-0000-000000000000"
 ## Manual para executar a pipeline  
   
 * Define these variables on Pipeline used by Terraform on pipeline
+
+```yaml
   - name: TF-KV
     value: $(TF-KeyVault-Name)
   - name: TF-Backend-ResourceGroup
@@ -29,9 +32,10 @@ export ARM_SUBSCRIPTION_ID="20000000-0000-0000-0000-000000000000"
   - name: TF-Environment-Name
     value: $(TF-Environment-Name)
   - name: TF-Path
-   value: "Terraform/Environment/4.Production"
+    value: "Terraform/Environment/4.Production"
+```
 
-# Create base on Azure
+## Create base on Azure
 
 ```bash
 $ az account set -s "NAME OF SUBSCRIPTION"
@@ -58,5 +62,6 @@ az storage blob upload \
 --file myFile.txt \
 --auth-mode login
 
-# Reference
+## Reference
+
 * https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs
