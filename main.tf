@@ -6,9 +6,6 @@ terraform {
     }
   }
 
-  #backend "azurerm" {
-  #  
-  #}
 }
 
 provider "azurerm" {
@@ -21,15 +18,46 @@ provider "azurerm" {
   }
 }
 
+
+locals {
+  main_tags = {
+    environment = var.environment
+    product     = var.product
+    department  = "Cloud"
+    source      = "Terraform"
+    responsible = "Team"
+  }
+}
+
+locals {
+  keyvault_role_assignments = [
+    "Key Vault Administrator", "Key Vault Secrets Officer", "Key Vault Reader", "Key Vault Secrets User"
+  ]
+  service_principals = [
+    "${var.sp_object_id}",
+    "${data.azurerm_client_config.current.object_id}"
+  ]
+  keyvault_role_service_principal_assignment = distinct(flatten([
+    for role in local.keyvault_role_assignments : [
+      for principal in local.service_principals : {
+        principal = principal
+        role      = role
+      }
+    ]
+  ]))
+}
+
 data "azurerm_client_config" "current" {}
 
 resource "azurerm_resource_group" "base" {
-  name     = "rg-base-${var.product}"
-  location = "eastus"
+  name     = "rg-${var.environment}-${var.product}-terraform"
+  location = var.location
+
+  tags = merge(local.main_tags, var.user_tags)
 }
 
 resource "azurerm_storage_account" "stg_base" {
-  name                     = "stgbase${var.environment}${var.product}"
+  name                     = "stgtf${var.environment}${var.product}"
   resource_group_name      = azurerm_resource_group.base.name
   location                 = azurerm_resource_group.base.location
   account_kind             = "StorageV2"
@@ -37,7 +65,7 @@ resource "azurerm_storage_account" "stg_base" {
   account_replication_type = "LRS"
   is_hns_enabled           = false
 
-  tags = var.tags
+  tags = merge(local.main_tags, var.user_tags)
 }
 
 resource "azurerm_storage_container" "terraform" {
@@ -50,126 +78,110 @@ resource "azurerm_storage_container" "terraform" {
 }
 
 resource "azurerm_container_registry" "acr_devops" {
-  name                = "acr-${var.product}${var.environment}"
-  resource_group_name = azurerm_resource_group.example.name
-  location            = azurerm_resource_group.example.location
+  name                = "acr${var.product}${var.environment}"
+  resource_group_name = azurerm_resource_group.base.name
+  location            = azurerm_resource_group.base.location
   sku                 = "Basic"
-  admin_enabled       = false
-}
+  admin_enabled       = true
 
-resource "azurerm_container_registry_scope_map" "acr_devops_scopemap" {
-  name                    = "acr-${var.product}${var.environment}-scopemap"
-  container_registry_name = azurerm_container_registry.acr_devops.name
-  resource_group_name     = azurerm_resource_group.base.name
-  actions = [
-    "repositories/*"
-  ]
-}
-
-resource "azurerm_container_registry_token" "acr_devops_token" {
-  name                    = "acr-devops-token"
-  container_registry_name = azurerm_container_registry.acr_devops.name
-  resource_group_name     = azurerm_resource_group.base.name
-  scope_map_id            = azurerm_container_registry_scope_map.acr_devops_scopemap.id
-}
-
-resource "azurerm_container_registry_token_password" "acr_devops_token_password" {
-  container_registry_token_id = azurerm_container_registry_token.acr_base_token.id
-
-  password1 {}
-  password2 {}
-
+  tags = merge(local.main_tags, var.user_tags)
 }
 
 resource "azurerm_key_vault" "base_tf_keyvault" {
-  name                       = "kv-infrastructure-${var.product}${var.environment}"
+  name                       = "kv-${var.environment}-${var.product}-terraform"
   location                   = azurerm_resource_group.base.location
   resource_group_name        = azurerm_resource_group.base.name
   tenant_id                  = data.azurerm_client_config.current.tenant_id
   sku_name                   = "standard"
+  enable_rbac_authorization  = true
+  purge_protection_enabled   = true
   soft_delete_retention_days = 7
 
-  access_policy {
-    tenant_id = data.azurerm_client_config.current.tenant_id
-    object_id = data.azurerm_client_config.current.object_id
+  depends_on = [
+    azurerm_resource_group.base,
+  ]
 
-    key_permissions = [
-      "Get", "List", "Update", "Create", "Import", "Delete", "Recover", "Backup", "Restore", "GetRotationPolicy", "SetRotationPolicy", "Rotate"
-    ]
+  tags = merge(local.main_tags, var.user_tags)
+}
 
-    secret_permissions = [
-      "Set",
-      "List",
-      "Get",
-      "Delete",
-      "Purge",
-      "Recover",
-      "Backup",
-      "Restore"
-    ]
-  }
-
-  lifecycle {
-    ignore_changes = [
-      access_policy,
-    ]
-  }
+resource "azurerm_role_assignment" "keyvault_role_assignment" {
+  scope                = azurerm_key_vault.base_tf_keyvault.id
+  for_each             = { for entry in local.keyvault_role_service_principal_assignment : "${entry.role}.${entry.principal}" => entry }
+  role_definition_name = each.value.role
+  principal_id         = each.value.principal
 
   depends_on = [
-    azurerm_resource_group.devops
+    azurerm_key_vault.base_tf_keyvault
   ]
 }
 
 resource "azurerm_key_vault_secret" "tf_stg_accesskey" {
-  name         = "stg-terraform-accesskey"
+  name         = "stg-terraform-access-key"
   value        = azurerm_storage_account.stg_base.primary_access_key
   key_vault_id = azurerm_key_vault.base_tf_keyvault.id
 
   depends_on = [
-    azurerm_storage_account.stg_base
+    azurerm_role_assignment.keyvault_role_assignment
   ]
 }
 
 resource "azurerm_key_vault_secret" "tf_clientId" {
-  name         = "tf-clientId"
-  value        = var.client_id
+  name         = "tf-client-id"
+  value        = var.sp_client_id
   key_vault_id = azurerm_key_vault.base_tf_keyvault.id
+  depends_on = [
+    azurerm_role_assignment.keyvault_role_assignment
+  ]
 }
 
-resource "azurerm_key_vault_secret" "tf_subscriptionId" {
-  name         = "tf-subscriptionId"
+resource "azurerm_key_vault_secret" "tf_client_secret" {
+  name         = "tf-client-secret"
+  value        = var.sp_client_secret
+  key_vault_id = azurerm_key_vault.base_tf_keyvault.id
+  depends_on = [
+    azurerm_role_assignment.keyvault_role_assignment
+  ]
+}
+
+resource "azurerm_key_vault_secret" "tf_subscription_id" {
+  name         = "tf-subscription-id"
   value        = data.azurerm_client_config.current.subscription_id
   key_vault_id = azurerm_key_vault.base_tf_keyvault.id
+  depends_on = [
+    azurerm_role_assignment.keyvault_role_assignment
+  ]
 }
 
-resource "azurerm_key_vault_secret" "tf_tenantId" {
-  name         = "tf-tenantId"
+resource "azurerm_key_vault_secret" "tf_tenant_id" {
+  name         = "tf-tenant-id"
   value        = data.azurerm_client_config.current.tenant_id
   key_vault_id = azurerm_key_vault.base_tf_keyvault.id
-}
-
-resource "azurerm_key_vault_secret" "tf_clientSecret" {
-  name         = "tf-tenantId"
-  value        = data.azurerm_client_config.current.tenant_id
-  key_vault_id = azurerm_key_vault.base_tf_keyvault.id
+  depends_on = [
+    azurerm_role_assignment.keyvault_role_assignment
+  ]
 }
 
 resource "azurerm_key_vault_secret" "acr_base_login" {
   name         = "acr-base-login"
-  value        = azurerm_container_registry_token.acr_devops_token.id
+  value        = azurerm_container_registry.acr_devops.admin_username
   key_vault_id = azurerm_key_vault.base_tf_keyvault.id
+  depends_on = [
+    azurerm_role_assignment.keyvault_role_assignment
+  ]
 }
-resource "azurerm_key_vault_secret" "acr-base-password" {
+resource "azurerm_key_vault_secret" "acr_base_password" {
   name         = "acr-base-password"
-  value        = azurerm_container_registry_token_password.acr_devops_token_password.password1
+  value        = azurerm_container_registry.acr_devops.admin_password
   key_vault_id = azurerm_key_vault.base_tf_keyvault.id
+  depends_on = [
+    azurerm_role_assignment.keyvault_role_assignment
+  ]
 }
-resource "azurerm_key_vault_secret" "acr-base-url" {
+resource "azurerm_key_vault_secret" "acr_base_url" {
   name         = "acr-base-url"
   value        = azurerm_container_registry.acr_devops.login_server
   key_vault_id = azurerm_key_vault.base_tf_keyvault.id
+  depends_on = [
+    azurerm_role_assignment.keyvault_role_assignment
+  ]
 }
-
-
-
-
