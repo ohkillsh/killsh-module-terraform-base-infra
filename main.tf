@@ -112,7 +112,7 @@ resource "azurerm_container_registry" "acr_devops" {
 }
 
 resource "azurerm_key_vault" "base_tf_keyvault" {
-  name                       = "kv-${var.environment}-${var.product}-terraform"
+  name                       = "kv-${var.environment}-${var.product}-tf"
   location                   = azurerm_resource_group.base.location
   resource_group_name        = azurerm_resource_group.base.name
   tenant_id                  = data.azurerm_client_config.current.tenant_id
