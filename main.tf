@@ -23,7 +23,7 @@ locals {
   main_tags = {
     environment = var.environment
     product     = var.product
-    department  = "Cloud"
+    department  = "TBD"
     source      = "Terraform"
     responsible = "Team"
   }
@@ -50,10 +50,18 @@ locals {
 data "azurerm_client_config" "current" {}
 
 resource "azurerm_resource_group" "base" {
-  name     = "rg-${var.environment}-${var.product}-terraform"
+  name     = "rg-${var.environment}-${var.product}-tf"
   location = var.location
 
   tags = merge(local.main_tags, var.user_tags)
+
+  lifecycle {
+    ignore_changes = [
+      tags,
+      location
+    ]
+  }
+
 }
 
 resource "azurerm_storage_account" "stg_base" {
@@ -66,6 +74,14 @@ resource "azurerm_storage_account" "stg_base" {
   is_hns_enabled           = false
 
   tags = merge(local.main_tags, var.user_tags)
+
+  lifecycle {
+    ignore_changes = [
+      tags,
+      location
+    ]
+  }
+
 }
 
 resource "azurerm_storage_container" "terraform" {
@@ -85,6 +101,14 @@ resource "azurerm_container_registry" "acr_devops" {
   admin_enabled       = true
 
   tags = merge(local.main_tags, var.user_tags)
+
+  lifecycle {
+    ignore_changes = [
+      tags,
+      location
+    ]
+  }
+
 }
 
 resource "azurerm_key_vault" "base_tf_keyvault" {
@@ -102,6 +126,13 @@ resource "azurerm_key_vault" "base_tf_keyvault" {
   ]
 
   tags = merge(local.main_tags, var.user_tags)
+
+  lifecycle {
+    ignore_changes = [
+      tags,
+      location
+    ]
+  }
 }
 
 resource "azurerm_role_assignment" "keyvault_role_assignment" {
