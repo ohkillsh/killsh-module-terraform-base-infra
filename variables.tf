@@ -21,11 +21,13 @@ variable "sp_client_id" {
 
 variable "sp_object_id" {
   type        = string
+  default     = "Define this value directly in Key Vault"
   description = "Object Id of service Principal for giving permission on Key Vault"
 }
 
 variable "sp_client_secret" {
   type      = string
+  default   = "Define this value directly in Key Vault"
   sensitive = true
 }
 
