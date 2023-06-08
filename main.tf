@@ -34,7 +34,7 @@ locals {
     "Key Vault Administrator", "Key Vault Secrets Officer", "Key Vault Reader", "Key Vault Secrets User"
   ]
   service_principals = [
-    "${var.sp_object_id}",
+    "${var.sp_client_id}",
     "${data.azurerm_client_config.current.object_id}"
   ]
   keyvault_role_service_principal_assignment = distinct(flatten([
