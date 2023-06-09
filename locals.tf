@@ -13,7 +13,7 @@ locals {
     "Key Vault Administrator"
   ]
   service_principals = [
-    "${data.azuread_service_principal.sp_devops_automation.display_name}",
+    "${data.azuread_service_principal.sp_devops_automation.object_id}",
     "${data.azurerm_client_config.current.object_id}"
   ]
   keyvault_role_service_principal_assignment = distinct(flatten([
