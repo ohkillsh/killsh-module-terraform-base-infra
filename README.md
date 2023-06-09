@@ -49,6 +49,26 @@ az storage blob upload --auth-mode login \
 --file terraform.tfstate \
 ```
 
+## Criando estrutura base utilizando como modulo
+
+Utilize o padrão git "ref=" para definir, tag, commit ou branch"
+
+```hcl
+module "terraform_infra" {
+  source = "git@github.com:ohkillsh/killsh-module-terraform-base-infra.git?ref=main"
+
+  sp_client_id = "Defina - application_id / client_id"
+  sp_object_id = "Defina - object_id"
+  product      = "killsh"
+  environment  = "global"
+  location     = "eastus"
+
+  user_tags = var.tags
+
+}
+
+```
+
 ## Reference
 
 * [Terraform Provider AzureRM](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs)
