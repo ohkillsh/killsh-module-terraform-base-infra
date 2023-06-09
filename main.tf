@@ -18,12 +18,6 @@ provider "azurerm" {
   }
 }
 
-
-
-
-
-data "azurerm_client_config" "current" {}
-
 resource "azurerm_resource_group" "base" {
   name     = "rg-${var.environment}-${var.product}-tf"
   location = var.location
@@ -98,6 +92,7 @@ resource "azurerm_key_vault" "base_tf_keyvault" {
 
   depends_on = [
     azurerm_resource_group.base,
+    data.azuread_service_principal.sp_devops_automation
   ]
 
   tags = merge(local.main_tags, var.user_tags)
