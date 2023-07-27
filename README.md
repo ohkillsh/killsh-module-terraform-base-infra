@@ -73,3 +73,6 @@ module "terraform_infra" {
 
 * [Terraform Provider AzureRM](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs)
 * [Azure Service Principal Doc](https://learn.microsoft.com/en-us/cli/azure/create-an-azure-service-principal-azure-cli)
+
+
+# TODO: fazer funcionar o terraform-docs
