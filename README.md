@@ -40,13 +40,13 @@ terraform plan -out="plan.tfplan" -var-file="variables/development.tfvars" -var 
 # Environment: Productiton
 terraform plan -out="plan.tfplan" -var-file="variables/production.tfvars"
 
-
 # Upload Terraform state to blob container
-az storage blob upload --auth-mode login \
---account-name <NAME OF STORAGE ACCOUNT CREATED ON STORAGEACCOUNT.TF> \
---container-name terraform \
---name dev.tfstate \
---file terraform.tfstate \
+CONNECTION_STRING='connection from azure storage'
+az storage blob upload --auth-mode key \
+  --connection-string=$CONNECTION_STRING \
+  --container-name terraform \
+  --name project.tfstate \
+  --file terraform.tfstate 
 ```
 
 ## Criando estrutura base utilizando como modulo
